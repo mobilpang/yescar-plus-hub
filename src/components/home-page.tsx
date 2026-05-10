@@ -200,38 +200,24 @@ export function HomePage() {
             </h2>
           </div>
 
-          <Tabs
-            value={processTab}
-            onValueChange={(v) => setProcessTab(v as "seller" | "buyer")}
-            className="mt-10"
-          >
-            <TabsList className="mx-auto grid w-full max-w-md grid-cols-2">
-              <TabsTrigger value="seller">양도자 (차주)</TabsTrigger>
-              <TabsTrigger value="buyer">양수자 (인수자)</TabsTrigger>
-            </TabsList>
+          <p className="mx-auto mt-4 max-w-xl text-center text-base text-muted-foreground">
+            상담부터 판매 완료까지, 예스카플러스 매니저가 모든 과정을 책임지고 진행합니다.
+          </p>
 
-            {[
-              { key: "seller", steps: sellerSteps },
-              { key: "buyer", steps: buyerSteps },
-            ].map(({ key, steps }) => (
-              <TabsContent key={key} value={key} className="mt-10">
-                <div className="grid gap-5 md:grid-cols-4">
-                  {steps.map((s, i) => (
-                    <div
-                      key={s.t}
-                      className="relative rounded-2xl border border-border bg-card p-6"
-                    >
-                      <div className="font-display text-sm font-bold text-accent">
-                        STEP {String(i + 1).padStart(2, "0")}
-                      </div>
-                      <h4 className="mt-3 text-lg font-bold text-primary">{s.t}</h4>
-                      <p className="mt-2 text-sm text-muted-foreground">{s.d}</p>
-                    </div>
-                  ))}
+          <div className="mt-12 grid gap-5 md:grid-cols-4">
+            {processSteps.map((s, i) => (
+              <div
+                key={s.t}
+                className="relative rounded-2xl border border-border bg-card p-6"
+              >
+                <div className="font-display text-sm font-bold text-accent">
+                  STEP {String(i + 1).padStart(2, "0")}
                 </div>
-              </TabsContent>
+                <h4 className="mt-3 text-lg font-bold text-primary">{s.t}</h4>
+                <p className="mt-2 text-sm text-muted-foreground">{s.d}</p>
+              </div>
             ))}
-          </Tabs>
+          </div>
         </div>
       </section>
 
