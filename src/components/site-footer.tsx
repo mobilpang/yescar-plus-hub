@@ -55,6 +55,11 @@ export function SiteFooter() {
                 </Link>
               </li>
               <li>
+                <Link to="/reviews" className="hover:text-primary-foreground">
+                  후기
+                </Link>
+              </li>
+              <li>
                 <Link to="/contact" className="hover:text-primary-foreground">
                   상담 신청
                 </Link>

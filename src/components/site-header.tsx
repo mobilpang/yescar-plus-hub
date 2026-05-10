@@ -14,6 +14,7 @@ const navItems = [
   { label: "매물 보기", to: "/listings" },
   { label: "회사 소개", to: "/about" },
   { label: "FAQ", to: "/faq" },
+  { label: "후기", to: "/reviews" },
 ] as const;
 
 export function SiteHeader() {
