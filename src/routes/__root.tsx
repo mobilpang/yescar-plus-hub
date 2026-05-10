@@ -72,14 +72,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "예스카 플러스 — 리스·렌트 승계 알선 전문" },
+      {
+        name: "description",
+        content:
+          "위약금 없이, 평균 7일 안에 승계 완료. 17만 구독자가 검증한 예스카의 리스·렌트 승계 알선.",
+      },
+      { property: "og:title", content: "예스카 플러스 — 리스·렌트 승계 알선" },
+      {
+        property: "og:description",
+        content: "위약금 없이 평균 7일 안에 승계 완료. 직영 매매상사 3곳.",
+      },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
       {
