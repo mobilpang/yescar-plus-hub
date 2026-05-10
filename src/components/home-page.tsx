@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+
 import {
   Phone,
   Car,
@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
 import {
   Accordion,
   AccordionItem,
@@ -28,18 +28,23 @@ const stats = [
   { value: "평균 7일", label: "승계 처리 기간", highlight: false },
 ];
 
-const sellerSteps = [
-  { t: "차량 정보 등록", d: "차종·금융 정보를 입력하면 담당자가 즉시 검토합니다." },
-  { t: "시세·승계 가능성 검토", d: "전문 컨설턴트가 잔여 가치와 승계 조건을 산정합니다." },
-  { t: "매수자 매칭", d: "예스카 채널을 통해 검증된 양수 희망자를 연결합니다." },
-  { t: "명의 이전 완료", d: "캐피탈사 협의부터 이전까지 모든 절차를 대행합니다." },
-];
-
-const buyerSteps = [
-  { t: "매물 선택", d: "원하는 차종과 잔여 조건의 매물을 선택합니다." },
-  { t: "신용 심사", d: "캐피탈사 승계 심사를 1영업일 내 진행합니다." },
-  { t: "인수 조건 협의", d: "인수금·옵션·인도 일정을 조율합니다." },
-  { t: "인수 완료", d: "명의 이전 후 차량을 즉시 인수합니다." },
+const processSteps = [
+  {
+    t: "상담 접수",
+    d: "차량·금융 정보를 받아 예스카플러스 매니저가 1:1 상담을 진행합니다.",
+  },
+  {
+    t: "차량 분석",
+    d: "잔여 리스/렌트 조건과 시세를 정밀 분석해 최적의 승계 전략을 제안합니다.",
+  },
+  {
+    t: "성능 점검 & 광고 제작",
+    d: "직영 매매상사에서 성능 점검 후 전문 사진·영상을 촬영하고 17만 채널과 플랫폼에 광고합니다.",
+  },
+  {
+    t: "구매자 매칭 & 판매 완료",
+    d: "구매자 상담부터 명의 이전, 판매 완료까지 예스카플러스 매니저가 전 과정을 책임집니다.",
+  },
 ];
 
 const faqs = [
@@ -57,8 +62,6 @@ const branches = [
 ];
 
 export function HomePage() {
-  const [processTab, setProcessTab] = useState<"seller" | "buyer">("seller");
-
   return (
     <div className="flex flex-col">
       {/* 1. Hero */}
@@ -195,38 +198,24 @@ export function HomePage() {
             </h2>
           </div>
 
-          <Tabs
-            value={processTab}
-            onValueChange={(v) => setProcessTab(v as "seller" | "buyer")}
-            className="mt-10"
-          >
-            <TabsList className="mx-auto grid w-full max-w-md grid-cols-2">
-              <TabsTrigger value="seller">양도자 (차주)</TabsTrigger>
-              <TabsTrigger value="buyer">양수자 (인수자)</TabsTrigger>
-            </TabsList>
+          <p className="mx-auto mt-4 max-w-xl text-center text-base text-muted-foreground">
+            상담부터 판매 완료까지, 예스카플러스 매니저가 모든 과정을 책임지고 진행합니다.
+          </p>
 
-            {[
-              { key: "seller", steps: sellerSteps },
-              { key: "buyer", steps: buyerSteps },
-            ].map(({ key, steps }) => (
-              <TabsContent key={key} value={key} className="mt-10">
-                <div className="grid gap-5 md:grid-cols-4">
-                  {steps.map((s, i) => (
-                    <div
-                      key={s.t}
-                      className="relative rounded-2xl border border-border bg-card p-6"
-                    >
-                      <div className="font-display text-sm font-bold text-accent">
-                        STEP {String(i + 1).padStart(2, "0")}
-                      </div>
-                      <h4 className="mt-3 text-lg font-bold text-primary">{s.t}</h4>
-                      <p className="mt-2 text-sm text-muted-foreground">{s.d}</p>
-                    </div>
-                  ))}
+          <div className="mt-12 grid gap-5 md:grid-cols-4">
+            {processSteps.map((s, i) => (
+              <div
+                key={s.t}
+                className="relative rounded-2xl border border-border bg-card p-6"
+              >
+                <div className="font-display text-sm font-bold text-accent">
+                  STEP {String(i + 1).padStart(2, "0")}
                 </div>
-              </TabsContent>
+                <h4 className="mt-3 text-lg font-bold text-primary">{s.t}</h4>
+                <p className="mt-2 text-sm text-muted-foreground">{s.d}</p>
+              </div>
             ))}
-          </Tabs>
+          </div>
         </div>
       </section>
 
