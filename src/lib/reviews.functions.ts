@@ -5,6 +5,7 @@ import {
   createStoredReview,
   deleteStoredReview,
   getReviewAdminSessionState,
+  getReviewStorageInfo,
   loginReviewAdminSession,
   logoutReviewAdminSession,
   readReviewsStore,
@@ -35,7 +36,7 @@ function createReviewFormValidator(data: unknown) {
     .object({
       author: z.string().trim().min(1, "고객명 또는 차량 태그를 입력해 주세요."),
       vehicleName: z.string().trim().min(1, "차량명을 입력해 주세요."),
-      summary: z.string().trim().min(1, "한 줄 후기를 입력해 주세요."),
+      summary: z.string().trim().min(1, "짧은 후기를 입력해 주세요."),
       badge: z.string().trim().max(20).optional().default(""),
       rating: z.number().int().min(1).max(5),
       status: reviewStatusSchema,
@@ -58,6 +59,10 @@ export const getReviews = createServerFn({ method: "GET" }).handler(async () => 
 
 export const getReviewAdminSession = createServerFn({ method: "GET" }).handler(async () => {
   return getReviewAdminSessionState();
+});
+
+export const getReviewStorage = createServerFn({ method: "GET" }).handler(async () => {
+  return getReviewStorageInfo();
 });
 
 export const loginReviewAdmin = createServerFn({ method: "POST" })

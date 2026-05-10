@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { reviewStatuses, type ReviewItem, type ReviewStatus } from "@/data/reviews";
+import { reviewStatuses, type ReviewItem, type ReviewStatus, type ReviewStorageInfo } from "@/data/reviews";
 import { createReview, deleteReview, loginReviewAdmin, logoutReviewAdmin } from "@/lib/reviews.functions";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +46,7 @@ const statusClasses: Record<ReviewStatus, string> = {
 type ReviewsPageProps = {
   initialAuthenticated: boolean;
   initialReviews: ReviewItem[];
+  initialStorageInfo: ReviewStorageInfo;
 };
 
 function formatUploadDate(uploadedAt: string) {
@@ -89,7 +90,11 @@ function revokePreviewUrl(url: string) {
   }
 }
 
-export function ReviewsPage({ initialAuthenticated, initialReviews }: ReviewsPageProps) {
+export function ReviewsPage({
+  initialAuthenticated,
+  initialReviews,
+  initialStorageInfo,
+}: ReviewsPageProps) {
   const createReviewFn = useServerFn(createReview);
   const deleteReviewFn = useServerFn(deleteReview);
   const loginReviewAdminFn = useServerFn(loginReviewAdmin);
@@ -97,12 +102,12 @@ export function ReviewsPage({ initialAuthenticated, initialReviews }: ReviewsPag
 
   const [reviews, setReviews] = useState(initialReviews);
   const [isAuthenticated, setIsAuthenticated] = useState(initialAuthenticated);
-  const [isComposerOpen, setIsComposerOpen] = useState(initialAuthenticated);
+  const [isComposerOpen, setIsComposerOpen] = useState(initialAuthenticated && initialStorageInfo.uploadsEnabled);
   const [author, setAuthor] = useState("");
   const [vehicleName, setVehicleName] = useState("");
   const [summary, setSummary] = useState("");
   const [badge, setBadge] = useState("");
-  const [status, setStatus] = useState<ReviewStatus>("상담 완료");
+  const [status, setStatus] = useState<ReviewStatus>("\uc0c1\ub2f4 \uc644\ub8cc");
   const [rating, setRating] = useState(5);
   const [adminPassword, setAdminPassword] = useState("");
   const [previewImage, setPreviewImage] = useState("");
@@ -121,8 +126,8 @@ export function ReviewsPage({ initialAuthenticated, initialReviews }: ReviewsPag
 
   useEffect(() => {
     setIsAuthenticated(initialAuthenticated);
-    setIsComposerOpen(initialAuthenticated);
-  }, [initialAuthenticated]);
+    setIsComposerOpen(initialAuthenticated && initialStorageInfo.uploadsEnabled);
+  }, [initialAuthenticated, initialStorageInfo.uploadsEnabled]);
 
   useEffect(() => {
     return () => {
@@ -159,7 +164,7 @@ export function ReviewsPage({ initialAuthenticated, initialReviews }: ReviewsPag
     setVehicleName("");
     setSummary("");
     setBadge("");
-    setStatus("상담 완료");
+    setStatus("\uc0c1\ub2f4 \uc644\ub8cc");
     setRating(5);
     setSelectedImage(null);
     revokePreviewUrl(previewImage);
@@ -180,7 +185,7 @@ export function ReviewsPage({ initialAuthenticated, initialReviews }: ReviewsPag
 
       startTransition(() => {
         setIsAuthenticated(session.authenticated);
-        setIsComposerOpen(session.authenticated);
+        setIsComposerOpen(session.authenticated && initialStorageInfo.uploadsEnabled);
       });
       setAdminPassword("");
       setFeedback("관리자 로그인이 완료됐습니다.");
@@ -311,7 +316,7 @@ export function ReviewsPage({ initialAuthenticated, initialReviews }: ReviewsPag
               </div>
               <div className="rounded-[24px] border border-white/70 bg-white/90 p-5 shadow-[0_18px_50px_rgba(61,24,94,0.08)] backdrop-blur">
                 <div className="text-sm font-medium text-muted-foreground">저장 위치</div>
-                <div className="mt-2 text-lg font-bold text-primary">Server JSON + Uploads</div>
+                <div className="mt-2 text-lg font-bold text-primary">{initialStorageInfo.label}</div>
               </div>
             </div>
           </div>
@@ -411,7 +416,7 @@ export function ReviewsPage({ initialAuthenticated, initialReviews }: ReviewsPag
               </form>
             ) : null}
 
-            {isAuthenticated && isComposerOpen ? (
+            {isAuthenticated && initialStorageInfo.uploadsEnabled && isComposerOpen ? (
               <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
@@ -570,7 +575,7 @@ export function ReviewsPage({ initialAuthenticated, initialReviews }: ReviewsPag
                   <Button
                     type="submit"
                     className="h-11 rounded-full bg-accent px-6 text-accent-foreground hover:bg-accent/90"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !initialStorageInfo.uploadsEnabled}
                   >
                     후기 올리기
                   </Button>
@@ -597,9 +602,14 @@ export function ReviewsPage({ initialAuthenticated, initialReviews }: ReviewsPag
               </div>
             ) : null}
 
+            {isAuthenticated && !initialStorageInfo.uploadsEnabled ? (
+              <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {initialStorageInfo.note}
+              </div>
+            ) : null}
+
             <p className="mt-5 text-xs leading-5 text-muted-foreground">
-              후기 데이터는 서버의 `.runtime/reviews.json`에 저장되고, 업로드 이미지는
-              `public/uploads/reviews`에 저장됩니다.
+              {initialStorageInfo.note}
             </p>
           </div>
         </div>
@@ -660,7 +670,7 @@ export function ReviewsPage({ initialAuthenticated, initialReviews }: ReviewsPag
                       {review.status}
                     </span>
                   </div>
-                  {isAuthenticated ? (
+                  {isAuthenticated && initialStorageInfo.uploadsEnabled ? (
                     <button
                       type="button"
                       className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-black/20 text-white backdrop-blur transition hover:bg-black/35"

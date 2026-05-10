@@ -1,8 +1,16 @@
 import crypto from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { del, get, put } from "@vercel/blob";
 import { getRequest, getRequestHeader, setResponseHeader } from "@tanstack/react-start/server";
-import { defaultReviews, reviewStatuses, type ReviewAdminSession, type ReviewItem, type ReviewStatus } from "@/data/reviews";
+import {
+  defaultReviews,
+  reviewStatuses,
+  type ReviewAdminSession,
+  type ReviewItem,
+  type ReviewStatus,
+  type ReviewStorageInfo,
+} from "@/data/reviews";
 
 const reviewRuntimeDirectory = path.join(process.cwd(), ".runtime");
 const reviewDataFile = path.join(reviewRuntimeDirectory, "reviews.json");
@@ -10,6 +18,10 @@ const reviewUploadDirectory = path.join(process.cwd(), "public", "uploads", "rev
 const reviewSessionCookie = "yescar-review-admin";
 const reviewSessionMaxAge = 60 * 60 * 12;
 const reviewUploadLimitInBytes = 3 * 1024 * 1024;
+const metadataBlobPath = "reviews/store/reviews.json";
+const reviewBlobImageDirectory = "reviews/images";
+const metadataBlobCacheSeconds = 60;
+const imageBlobCacheSeconds = 60 * 60 * 24 * 30;
 
 const allowedImageTypes = new Map<string, string>([
   ["image/jpeg", "jpg"],
@@ -33,6 +45,34 @@ function getAdminPassword() {
 
 function getAdminSecret() {
   return process.env.REVIEWS_ADMIN_SECRET ?? `${getAdminPassword()}::review-session`;
+}
+
+function isBlobStorageConfigured() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+function isVercelRuntime() {
+  return Boolean(process.env.VERCEL);
+}
+
+function getReviewStorageMode(): ReviewStorageInfo["mode"] {
+  if (isBlobStorageConfigured()) {
+    return "vercel-blob";
+  }
+
+  if (isVercelRuntime()) {
+    return "vercel-missing-blob";
+  }
+
+  return "filesystem";
+}
+
+function assertReviewWritesAvailable() {
+  if (getReviewStorageMode() === "vercel-missing-blob") {
+    throw new Error(
+      "Vercel Blob이 연결되지 않아 후기 저장을 사용할 수 없습니다. Vercel Storage에서 Blob을 만들고 `BLOB_READ_WRITE_TOKEN` 환경 변수를 연결해 주세요.",
+    );
+  }
 }
 
 function encodeBase64Url(input: Buffer | string) {
@@ -176,40 +216,110 @@ function isReviewItem(value: unknown): value is ReviewItem {
   );
 }
 
-async function ensureReviewDirectories() {
+async function ensureFilesystemDirectories() {
   await fs.mkdir(reviewRuntimeDirectory, { recursive: true });
   await fs.mkdir(reviewUploadDirectory, { recursive: true });
 }
 
-async function writeReviewsStore(reviews: ReviewItem[]) {
-  await ensureReviewDirectories();
+async function writeFilesystemReviewsStore(reviews: ReviewItem[]) {
+  await ensureFilesystemDirectories();
   await fs.writeFile(reviewDataFile, JSON.stringify(sortReviews(reviews), null, 2), "utf8");
 }
 
+async function writeBlobReviewsStore(reviews: ReviewItem[]) {
+  await put(metadataBlobPath, JSON.stringify(sortReviews(reviews), null, 2), {
+    access: "public",
+    allowOverwrite: true,
+    contentType: "application/json; charset=utf-8",
+    cacheControlMaxAge: metadataBlobCacheSeconds,
+  });
+}
+
+async function writeReviewsStore(reviews: ReviewItem[]) {
+  switch (getReviewStorageMode()) {
+    case "vercel-blob":
+      await writeBlobReviewsStore(reviews);
+      return;
+    case "filesystem":
+      await writeFilesystemReviewsStore(reviews);
+      return;
+    case "vercel-missing-blob":
+      throw new Error(
+        "Vercel Blob이 연결되지 않아 후기 저장을 완료할 수 없습니다. `BLOB_READ_WRITE_TOKEN`을 먼저 설정해 주세요.",
+      );
+  }
+}
+
 function sanitizeFileSegment(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9가-힣]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 32) || "review";
+  return (
+    value
+      .normalize("NFKD")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 32) || "review"
+  );
+}
+
+function isBlobImageUrl(imagePath: string) {
+  return imagePath.includes(".blob.vercel-storage.com/");
 }
 
 async function removeStoredImage(imagePath: string) {
-  if (!imagePath.startsWith("/uploads/reviews/")) {
+  if (imagePath.startsWith("/uploads/reviews/")) {
+    const targetPath = path.join(reviewUploadDirectory, path.basename(imagePath));
+
+    try {
+      await fs.rm(targetPath, { force: true });
+    } catch {
+      // Ignore image cleanup errors so metadata deletion still succeeds.
+    }
+
     return;
   }
 
-  const targetPath = path.join(reviewUploadDirectory, path.basename(imagePath));
+  if (!isBlobImageUrl(imagePath)) {
+    return;
+  }
 
   try {
-    await fs.rm(targetPath, { force: true });
+    await del(imagePath);
   } catch {
     // Ignore image cleanup errors so metadata deletion still succeeds.
   }
 }
 
-export async function readReviewsStore() {
-  await ensureReviewDirectories();
+async function readBlobText(blobPath: string) {
+  const blob = await get(blobPath, { access: "public" });
+
+  if (!blob || blob.statusCode !== 200 || !blob.stream) {
+    return null;
+  }
+
+  return new Response(blob.stream).text();
+}
+
+async function readBlobReviewsStore() {
+  try {
+    const rawValue = await readBlobText(metadataBlobPath);
+
+    if (rawValue) {
+      const parsed = JSON.parse(rawValue);
+
+      if (Array.isArray(parsed) && parsed.every(isReviewItem)) {
+        return sortReviews(parsed);
+      }
+    }
+  } catch {
+    // Fall through to reset with seeded reviews.
+  }
+
+  await writeBlobReviewsStore(defaultReviews);
+  return sortReviews(defaultReviews);
+}
+
+async function readFilesystemReviewsStore() {
+  await ensureFilesystemDirectories();
 
   try {
     const rawValue = await fs.readFile(reviewDataFile, "utf8");
@@ -222,8 +332,76 @@ export async function readReviewsStore() {
     // Fall through to reset with seeded reviews.
   }
 
-  await writeReviewsStore(defaultReviews);
+  await writeFilesystemReviewsStore(defaultReviews);
   return sortReviews(defaultReviews);
+}
+
+async function storeReviewImageOnFilesystem(imageFile: File, vehicleName: string, imageExtension: string) {
+  await ensureFilesystemDirectories();
+
+  const nextFileName = `${Date.now()}-${sanitizeFileSegment(vehicleName)}-${crypto.randomUUID()}.${imageExtension}`;
+  const nextImagePath = path.join(reviewUploadDirectory, nextFileName);
+  const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
+
+  await fs.writeFile(nextImagePath, imageBuffer);
+
+  return `/uploads/reviews/${nextFileName}`;
+}
+
+async function storeReviewImageOnBlob(imageFile: File, vehicleName: string, imageExtension: string) {
+  const nextFileName = `${Date.now()}-${sanitizeFileSegment(vehicleName)}-${crypto.randomUUID()}.${imageExtension}`;
+  const blob = await put(`${reviewBlobImageDirectory}/${nextFileName}`, imageFile, {
+    access: "public",
+    contentType: imageFile.type,
+    cacheControlMaxAge: imageBlobCacheSeconds,
+  });
+
+  return blob.url;
+}
+
+async function storeReviewImage(imageFile: File, vehicleName: string, imageExtension: string) {
+  if (getReviewStorageMode() === "vercel-blob") {
+    return storeReviewImageOnBlob(imageFile, vehicleName, imageExtension);
+  }
+
+  return storeReviewImageOnFilesystem(imageFile, vehicleName, imageExtension);
+}
+
+export async function readReviewsStore() {
+  switch (getReviewStorageMode()) {
+    case "vercel-blob":
+      return readBlobReviewsStore();
+    case "filesystem":
+      return readFilesystemReviewsStore();
+    case "vercel-missing-blob":
+      return sortReviews(defaultReviews);
+  }
+}
+
+export function getReviewStorageInfo(): ReviewStorageInfo {
+  switch (getReviewStorageMode()) {
+    case "vercel-blob":
+      return {
+        mode: "vercel-blob",
+        label: "Vercel Blob",
+        note: "후기 데이터와 이미지는 Vercel Blob에 영구 저장됩니다.",
+        uploadsEnabled: true,
+      };
+    case "filesystem":
+      return {
+        mode: "filesystem",
+        label: "Local JSON + uploads",
+        note: "후기 데이터는 `.runtime/reviews.json`에, 이미지는 `public/uploads/reviews`에 저장됩니다.",
+        uploadsEnabled: true,
+      };
+    case "vercel-missing-blob":
+      return {
+        mode: "vercel-missing-blob",
+        label: "Blob setup required",
+        note: "Vercel 배포에서는 `BLOB_READ_WRITE_TOKEN` 환경 변수를 연결해야 후기 업로드가 영구 저장됩니다.",
+        uploadsEnabled: false,
+      };
+  }
 }
 
 export function getReviewAdminSessionState(): ReviewAdminSession {
@@ -249,12 +427,13 @@ export function logoutReviewAdminSession(): ReviewAdminSession {
 
 export function requireReviewAdminSession() {
   if (!readAdminSessionToken()) {
-    throw new Error("관리자 로그인 후 사용할 수 있습니다.");
+    throw new Error("관리자 로그인이 필요합니다.");
   }
 }
 
 export async function createStoredReview(input: CreateReviewInput) {
   requireReviewAdminSession();
+  assertReviewWritesAvailable();
 
   if (input.imageFile.size > reviewUploadLimitInBytes) {
     throw new Error("이미지는 3MB 이하로 업로드해 주세요.");
@@ -263,23 +442,16 @@ export async function createStoredReview(input: CreateReviewInput) {
   const imageExtension = allowedImageTypes.get(input.imageFile.type);
 
   if (!imageExtension) {
-    throw new Error("JPG, PNG, WEBP 이미지로 업로드해 주세요.");
+    throw new Error("JPG, PNG, WEBP 이미지만 업로드할 수 있습니다.");
   }
 
-  await ensureReviewDirectories();
-
-  const nextFileName = `${Date.now()}-${sanitizeFileSegment(input.vehicleName)}-${crypto.randomUUID()}.${imageExtension}`;
-  const nextImagePath = path.join(reviewUploadDirectory, nextFileName);
-  const imageBuffer = Buffer.from(await input.imageFile.arrayBuffer());
-
-  await fs.writeFile(nextImagePath, imageBuffer);
-
+  const nextImage = await storeReviewImage(input.imageFile, input.vehicleName, imageExtension);
   const nextReview: ReviewItem = {
     id: crypto.randomUUID(),
     author: input.author.trim(),
     vehicleName: input.vehicleName.trim(),
     summary: input.summary.trim(),
-    image: `/uploads/reviews/${nextFileName}`,
+    image: nextImage,
     uploadedAt: new Date().toISOString(),
     badge: input.badge.trim() || input.status,
     rating: input.rating,
@@ -296,6 +468,7 @@ export async function createStoredReview(input: CreateReviewInput) {
 
 export async function deleteStoredReview(id: string) {
   requireReviewAdminSession();
+  assertReviewWritesAvailable();
 
   const currentReviews = await readReviewsStore();
   const reviewToDelete = currentReviews.find((review) => review.id === id);
