@@ -62,8 +62,6 @@ const branches = [
 ];
 
 export function HomePage() {
-  const [processTab, setProcessTab] = useState<"seller" | "buyer">("seller");
-
   return (
     <div className="flex flex-col">
       {/* 1. Hero */}
